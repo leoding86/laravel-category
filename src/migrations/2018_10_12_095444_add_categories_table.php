@@ -7,6 +7,8 @@ use Illuminate\Database\Migrations\Migration;
 
 class AddCategoriesTable extends Migration
 {
+    protected static $tablename = 'categories';
+
     /**
      * Run the migrations.
      *
@@ -14,8 +16,8 @@ class AddCategoriesTable extends Migration
      */
     public function up()
     {
-        if (!Schema::hasTable('categories')) {
-            Schema::create('categories', function (Blueprint $table) {
+        if (!Schema::hasTable(static::$tablename)) {
+            Schema::create(static::$tablename, function (Blueprint $table) {
                 $table->increments('id');
                 $table->unsignedInteger('parent_id')->default(0);
                 $table->string('name', 255);
@@ -39,9 +41,9 @@ class AddCategoriesTable extends Migration
      */
     public function down()
     {
-        if (Schema::hasTable('categories')) {
+        if (Schema::hasTable(static::$tablename)) {
             // Backup table
-            Schema::rename('categories', 'categories_' . Carbon::now()->timestamp);
+            Schema::rename(static::$tablename, static::$tablename . '_' . Carbon::now()->timestamp);
         }
     }
 }
