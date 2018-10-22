@@ -22,6 +22,10 @@ class AddCategoryRelationships extends Migration
             Schema::create(static::$tablename, function (Blueprint $table) {
                 $table->unsignedInteger('category_id');
                 $table->unsignedInteger('parents_category_id');
+
+                // Add indexes
+                $table->index('category_id');
+                $table->index('parents_category_id');
             });
         }
     }
@@ -34,6 +38,11 @@ class AddCategoryRelationships extends Migration
     public function down()
     {
         if (Schema::hasTable(static::$tablename)) {
+            // Change comment
+            Schema::table(static::$tablename, function (Blueprint $table) {
+                $table->comment('Backup table for ' . static::$tablename);
+            });
+
             // Backup table
             Schema::rename(static::$tablename, static::$tablename . '_' . Carbon::now()->timestamp);
         }
