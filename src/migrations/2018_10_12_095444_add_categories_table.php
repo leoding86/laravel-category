@@ -21,7 +21,7 @@ class AddCategoriesTable extends Migration
                 $table->increments('id');
                 $table->unsignedInteger('parent_id')->default(0);
                 $table->string('name', 255);
-                $table->string('related_model', 255);
+                $table->string('related_model', 255)->nullable();
                 $table->unsignedInteger('created_at');
                 $table->unsignedInteger('updated_at');
                 $table->unsignedInteger('deleted_at')->nullable();
