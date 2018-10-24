@@ -103,4 +103,11 @@ class MainTest extends TestCase
         $this->assertEquals(2, $category->getFullTree()->children->count());
         $this->assertEquals(2, $category->getTree(Category::where('id', 2)->first())->children->count());
     }
+
+    public function testCreateNullableRelatedModelCategory()
+    {
+        $category = Category::createCategory('category without related model');
+
+        $this->assertEquals(null, $category->related_model);
+    }
 }
