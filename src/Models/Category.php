@@ -107,11 +107,11 @@ class Category extends Model implements CategoryContract
     }
 
     /**
-     * 创建一个分类
+     * Create a category, it should be called in a transaction
      *
      * @param string $name
      * @param string $related_model
-     * @param CategoryContract $parentCategory 父分类对象
+     * @param CategoryContract $parentCategory
      * @return $this
      */
     public static function createCategory($name, $related_model = null, CategoryContract $parentCategory = null)
@@ -127,14 +127,14 @@ class Category extends Model implements CategoryContract
             $parent_id = 0;
         }
 
-        if (!$related_model) {
-            throw new EmptyRelatedModelException;
-        }
-
         $category = new static;
         $category->name = $name;
         $category->parent_id = $parent_id;
-        $category->related_model = $related_model;
+
+        if ($related_model) {
+            $category->related_model = $related_model;
+        }
+
         $category->save();
 
         if ($parentCategory !== null) {
