@@ -178,10 +178,8 @@ class Category extends Model implements CategoryContract
         $tree_categories[0] = $this->simplify(true);
 
         foreach ($categories as $category_id => $category) {
-            $simplifiedCategory = $category->simplify();
-
             if (!isset($tree_categories[$category->id])) {
-                $tree_categories[$category->id] = $simplifiedCategory;
+                $tree_categories[$category->id] = $category->simplify();
             }
 
             // 判断是否存在父分类
@@ -191,9 +189,9 @@ class Category extends Model implements CategoryContract
                 }
 
                 $tree_categories[$category->id]->parent = $tree_categories[$category->parent_id];
-                $tree_categories[$category->parent_id]->children->push($simplifiedCategory);
+                $tree_categories[$category->parent_id]->children->push($tree_categories[$category->id]);
             } else {
-                $tree_categories[0]->children->push($simplifiedCategory);
+                $tree_categories[0]->children->push($tree_categories[$category->id]);
             }
         }
 
