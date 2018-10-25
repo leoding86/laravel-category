@@ -6,6 +6,7 @@ use LDing\LaravelCategory\Contracts\CategoryContract;
 use LDing\LaravelCategory\Exceptions\DifferentRelatedModelException;
 use LDing\LaravelCategory\Exceptions\EmptyRelatedModelException;
 use LDing\LaravelCategory\Exceptions\RemoveCategoryHasChildException;
+use LDing\LaravelCategory\Exceptions\AppendSelfException;
 
 class Category extends Model implements CategoryContract
 {
@@ -94,6 +95,10 @@ class Category extends Model implements CategoryContract
     {
         if ($this->related_model !== $category->related_model) {
             throw new DifferentRelatedModelException;
+        }
+
+        if ($this->id == $category->id) {
+            throw new AppendSelfException;
         }
 
         $category->removeParents();
