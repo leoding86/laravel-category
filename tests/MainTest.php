@@ -6,6 +6,7 @@ use Tests\TestCase;
 use Illuminate\Support\Facades\DB;
 use LDing\LaravelCategory\Exceptions\DifferentRelatedModelException;
 use LDing\LaravelCategory\Exceptions\RemoveCategoryHasChildException;
+use LDing\LaravelCategory\Exceptions\AppendSelfException;
 use LDing\LaravelCategory\Models\Category;
 
 class MainTest extends TestCase
@@ -71,6 +72,17 @@ class MainTest extends TestCase
         try {
             $level1Category->appendCategory($level2Category);
         } catch (DifferentRelatedModelException $e) {
+            $this->expectException(get_class($e));
+        }
+    }
+
+    public function testAppendSelfException()
+    {
+        $level2Category = Category::createCategory('二级分类6', 'App\\Investigation');
+
+        try {
+            $level2Category->appendCategory($level2Category);
+        } catch (AppendSelfException $e) {
             $this->expectException(get_class($e));
         }
     }
