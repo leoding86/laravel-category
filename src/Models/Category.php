@@ -7,6 +7,8 @@ use LDing\LaravelCategory\Exceptions\DifferentRelatedModelException;
 use LDing\LaravelCategory\Exceptions\EmptyRelatedModelException;
 use LDing\LaravelCategory\Exceptions\RemoveCategoryHasChildException;
 use LDing\LaravelCategory\Exceptions\AppendSelfException;
+use LDing\LaravelCategory\Exceptions\AppendRootException;
+use LDing\LaravelCategory\Exceptions\DeleteRootException;
 
 class Category extends Model implements CategoryContract
 {
@@ -93,6 +95,10 @@ class Category extends Model implements CategoryContract
      */
     public function appendCategory(CategoryContract $category)
     {
+        if ($this->id == 1) {
+            throw new appendRootException;
+        }
+
         if ($this->related_model !== $category->related_model) {
             throw new DifferentRelatedModelException;
         }
@@ -158,6 +164,10 @@ class Category extends Model implements CategoryContract
      */
     public function removeCategory()
     {
+        if ($this->id == 0) {
+            throw new DeleteRootException;
+        }
+
         if ($this->children && $this->children->count() > 0) {
             throw new RemoveCategoryHasChildException;
         }
