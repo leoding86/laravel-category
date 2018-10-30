@@ -8,12 +8,11 @@ use LDing\LaravelCategory\Exceptions\EmptyRelatedModelException;
 use LDing\LaravelCategory\Exceptions\RemoveCategoryHasChildException;
 use LDing\LaravelCategory\Exceptions\AppendSelfException;
 use LDing\LaravelCategory\Exceptions\AppendRootException;
-use LDing\LaravelCategory\Exceptions\DeleteRootException;
 
 class Category extends Model implements CategoryContract
 {
-    const CACHE_KEY = 'LDING_CATEGORY_TREE_CACHE';
-    protected static $tree;
+    const CACHE_KEY = 'LDING_CATEGORIES_BRANCHES_CACHE';
+    protected static $branches;
     protected $dateFormat = 'U';
     protected $fillable = ['name', 'parent_id'];
 
@@ -95,7 +94,7 @@ class Category extends Model implements CategoryContract
      */
     public function appendCategory(CategoryContract $category)
     {
-        if ($this->id == 1) {
+        if ($category->id == 1) {
             throw new appendRootException;
         }
 
@@ -114,7 +113,31 @@ class Category extends Model implements CategoryContract
         $this->load(['children', 'allChildren']);
         $category->load(['parent', 'parents']);
 
-        static::clearTreeCache();
+        static::clearBranchesCache();
+    }
+
+    /**
+     * Create a root category, a helper method
+     *
+     * @param string $name
+     * @param string $related_model
+     * @return Category
+     */
+    public static function createRootCategory($name, $related_model = null)
+    {
+        return static::createCategory($name, $related_model);
+    }
+
+    /**
+     * Create a sub-category, a helper method
+     *
+     * @param string $name
+     * @param CategoryContract $parentCategory
+     * @return Category
+     */
+    public static function createSubCategory($name, CategoryContract $parentCategory)
+    {
+        return static::createCategory($name, null, $parentCategory);
     }
 
     /**
@@ -151,7 +174,7 @@ class Category extends Model implements CategoryContract
         if ($parentCategory !== null) {
             $parentCategory->appendCategory($category);
         } else {
-            static::clearTreeCache();
+            static::clearBranchesCache();
         }
 
         return $category;
@@ -164,10 +187,6 @@ class Category extends Model implements CategoryContract
      */
     public function removeCategory()
     {
-        if ($this->id == 0) {
-            throw new DeleteRootException;
-        }
-
         if ($this->children && $this->children->count() > 0) {
             throw new RemoveCategoryHasChildException;
         }
@@ -176,44 +195,49 @@ class Category extends Model implements CategoryContract
 
         $this->delete(); // 删除当前分类
 
-        static::clearTreeCache();
+        static::clearBranchesCache();
     }
 
     /**
-     * 缓存分类树
+     * Cache categories tree
      *
-     * @return void
+     * @return string
      */
-    public function cacheTree()
+    public function cacheBranches()
     {
-        $categories = (new static)->all()->keyBy('id');
-        $tree_categories = [];
+        $categories = (new static)->all();
+        $branches = [];
 
-        // 压入一个根分类对象
-        $tree_categories[0] = $this->simplify(true);
-
-        foreach ($categories as $category_id => $category) {
-            if (!isset($tree_categories[$category->id])) {
-                $tree_categories[$category->id] = $category->simplify();
+        foreach ($categories as $category) {
+            if (!isset($branches[$category->id])) {
+                $branches[$category->id] = $category->simplify();
             }
 
-            // 判断是否存在父分类
             if ($category->parent_id > 0) {
-                if (!isset($tree_categories[$category->parent_id])) {
-                    $tree_categories[$category->parent_id] = $categories[$category->parent_id]->simplify();
+                if (!isset($branches[$category->parent_id])) {
+                    $branches[$category->parent_id] = $categories[$category->parent_id]->simplify();
                 }
 
-                $tree_categories[$category->id]->parent = $tree_categories[$category->parent_id];
-                $tree_categories[$category->parent_id]->children->push($tree_categories[$category->id]);
-            } else {
-                $tree_categories[0]->children->push($tree_categories[$category->id]);
+                $branches[$category->id]->parent = $branches[$category->parent_id];
+                $branches[$category->parent_id]->children[] = $branches[$category->id];
             }
         }
 
-        $serialized_tree = serialize($tree_categories);
-        Cache::forever(static::CACHE_KEY, $serialized_tree);
+        $serialized_branches = serialize($branches);
+        Cache::forever(static::CACHE_KEY, $serialized_branches);
 
-        return $serialized_tree;
+        return $serialized_branches;
+    }
+
+    public function getBranches()
+    {
+        if (static::$branches) {
+            return static::$branches;
+        } else if (Cache::get(static::CACHE_KEY)) {
+            return unserialize(Cache::get(static::CACHE_KEY));
+        } else {
+            return unserialize($this->cacheBranches());
+        }
     }
 
     /**
@@ -221,14 +245,14 @@ class Category extends Model implements CategoryContract
      *
      * @return void
      */
-    public static function clearTreeCache()
+    public static function clearBranchesCache()
     {
         Cache::forget(static::CACHE_KEY);
-        static::$tree = null;
+        static::$trees = null;
     }
 
     /**
-     * 获得分类树
+     * Get specified category tree
      *
      * @param CategoryContract|null $category
      * @return \StdClass
@@ -239,13 +263,33 @@ class Category extends Model implements CategoryContract
     }
 
     /**
-     * 获得完整的分类树结构
+     * Get all categories tree
      *
+     * @return array
+     */
+    public function getTrees()
+    {
+        $branches = $this->getBranches();
+        $trees = [];
+
+        foreach ($branches as $branch) {
+            if ($branch->parent_id == 0) {
+                $trees[] = $branch;
+            }
+        }
+
+        return $trees;
+    }
+
+    /**
+     * Get specified category branch
+     *
+     * @param int $category_id
      * @return \StdClass
      */
-    public function getFullTree()
+    public function getBranchById($category_id)
     {
-        return $this->getTreeById(0);
+        return $this->getBranches()[$category_id];
     }
 
     /**
@@ -254,16 +298,15 @@ class Category extends Model implements CategoryContract
      * @param integer $category_id
      * @return \StdClass
      */
-    protected function getTreeById($category_id = 0)
+    public function getTreeById($category_id)
     {
-        if (static::$tree == null) {
-            if (!($serialized_tree = Cache::get(static::CACHE_KEY))) {
-                $serialized_tree = $this->cacheTree();
-            }
-            static::$tree = unserialize($serialized_tree);
+        $tree = $this->getBranchById($category_id);
+
+        if ($tree->parent_id != 0) {
+            return null;
         }
 
-        return static::$tree[$category_id];
+        return $tree;
     }
 
     /**
@@ -273,13 +316,13 @@ class Category extends Model implements CategoryContract
      * @param boolean $root
      * @return \StdClass
      */
-    protected function simplify($root = false)
+    protected function simplify()
     {
         $category = new \StdClass;
-        $category->id = $root ? 0 : $this->id;
-        $category->name = $root ? '' : $this->name;
+        $category->id = $this->id;
+        $category->name = $this->name;
         $category->parent = null;
-        $category->children = collect();
+        $category->children = [];
         return $category;
     }
 
