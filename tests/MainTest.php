@@ -72,7 +72,7 @@ class MainTest extends TestCase
     {
         DB::table('categories')->truncate();
         DB::table('category_relationships')->truncate();
-        Category::clearTreesCache();
+        Category::clearBranchesCache();
     }
 
     public function testAddCategory()
@@ -101,7 +101,7 @@ class MainTest extends TestCase
         $level2Category = Category::where('name', '二级分类')->first();
         $level3Category = Category::createCategory('三级分类', 'App\\Collector', $level2Category);
 
-        $this->assertEquals(1, count($level2Category->getTree()->children));
+        $this->assertEquals(1, count($level2Category->getBranch()->children));
         $this->assertContains($level3Category->id, $level1Category->allChildren->pluck('id'));
     }
 
@@ -165,14 +165,14 @@ class MainTest extends TestCase
     {
         $category = new Category;
 
-        $this->assertEquals(1, count($category->getTreeById(1)->children));
-        $this->assertEquals(2, count($category->getTree(Category::where('id', 2)->first())->children));
+        $this->assertEquals(1, count($category->getBranch(1)->children));
+        $this->assertEquals(2, count($category->getBranch(Category::where('id', 2)->first())->children));
     }
 
     public function testTreesCount()
     {
         $category = Category::createRootCategory('Root Category 2');
-        $this->assertEquals(2, count(json_decode(json_encode($category->getTrees()), true)));
+        $this->assertEquals(4, count($category->getTrees()));
     }
 
     public function testCreateNullableRelatedModelCategory()
@@ -180,5 +180,12 @@ class MainTest extends TestCase
         $category = Category::createCategory('category without related model');
 
         $this->assertEquals(null, $category->related_model);
+    }
+
+    public function testToJson()
+    {
+        $category = new Category;
+        $sc = $category->getBranchById(1);
+        $sc->toJson();
     }
 }
