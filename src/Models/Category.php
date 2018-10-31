@@ -312,7 +312,7 @@ class Category extends Model implements CategoryContract
     }
 
     /**
-     * Get all categories tree
+     * Get all root category trees with array type for converting json
      *
      * @return array
      */
@@ -323,7 +323,7 @@ class Category extends Model implements CategoryContract
 
         foreach ($branches as $branch) {
             if (!$branch->parent) {
-                $trees[] = $branch;
+                $trees[] = $branch->toArray();
             }
         }
 
