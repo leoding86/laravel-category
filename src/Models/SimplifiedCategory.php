@@ -37,8 +37,12 @@ class SimplifiedCategory
         return json_encode($cat);
     }
 
-    protected function toArray(SimplifiedCategory $category)
+    public function toArray(SimplifiedCategory $category = null)
     {
+        if ($category === null) {
+            $category = $this;
+        }
+
         $cat = [
             'id' => $category->id,
             'parent_id' => $category->parent ? $category->parent->id : null,
