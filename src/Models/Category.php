@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use LDing\LaravelCategory\Models\SimplifiedCategory;
 use LDing\LaravelCategory\Contracts\CategoryContract;
 use LDing\LaravelCategory\Exceptions\DifferentRelatedModelException;
 use LDing\LaravelCategory\Exceptions\EmptyRelatedModelException;
@@ -173,9 +174,9 @@ class Category extends Model implements CategoryContract
 
         if ($parentCategory !== null) {
             $parentCategory->appendCategory($category);
-        } else {
-            static::clearBranchesCache();
         }
+
+        static::clearBranchesCache();
 
         return $category;
     }
@@ -199,34 +200,89 @@ class Category extends Model implements CategoryContract
     }
 
     /**
+     * Add branch to static property $branches
+     *
+     * @param SimplifiedCategory $category
+     * @return void
+     */
+    protected function addBranch(SimplifiedCategory $category)
+    {
+        static::$branches[$category->id] = $category;
+    }
+
+    /**
+     * Check is branch with specified offset exists in static property $branches.
+     *
+     * @param mixed $category
+     * @return boolean
+     */
+    protected function hasBranch($category)
+    {
+        return $this->retrieveBranch($category) !== null;
+    }
+
+    /**
+     * Get a branch from static property $branches
+     *
+     * @param mixed $category
+     * @return SimplifiedCategory
+     */
+    protected function retrieveBranch($category)
+    {
+        $class = __CLASS__;
+
+        if ($category instanceof $class) {
+            $offset = $category->id;
+        } else {
+            $offset = $category;
+        }
+
+        return isset(static::$branches[$offset]) ? static::$branches[$offset] : null;
+    }
+
+    /**
      * Cache categories tree
      *
      * @return string
      */
     public function cacheBranches()
     {
-        $categories = (new static)->all();
-        $branches = [];
+        $categories = (new static)->all()->keyBy('id');
 
         foreach ($categories as $category) {
-            if (!isset($branches[$category->id])) {
-                $branches[$category->id] = $category->simplify();
+            if (!$this->hasBranch($category)) {
+                $this->addBranch($category->simplify());
             }
 
+            $simplifiedCategory = $this->retrieveBranch($category);
+
             if ($category->parent_id > 0) {
-                if (!isset($branches[$category->parent_id])) {
-                    $branches[$category->parent_id] = $categories[$category->parent_id]->simplify();
+                if (!$this->hasBranch($category->parent_id)) {
+                    $this->addBranch($categories[$category->parent_id]->simplify());
                 }
 
-                $branches[$category->id]->parent = $branches[$category->parent_id];
-                $branches[$category->parent_id]->children[] = $branches[$category->id];
+                $parentSimplifiedCategory = $this->retrieveBranch($category->parent_id);
+
+                $simplifiedCategory->setParent($parentSimplifiedCategory);
+
+                $parentSimplifiedCategory->addChild($simplifiedCategory);
             }
         }
 
-        $serialized_branches = serialize($branches);
-        Cache::forever(static::CACHE_KEY, $serialized_branches);
+        Cache::forever(static::CACHE_KEY, static::$branches);
 
-        return $serialized_branches;
+        return static::$branches;
+    }
+
+    /**
+     * Clear branches cache
+     *
+     * @return void
+     */
+    public static function clearBranchesCache()
+    {
+        Cache::forget(static::CACHE_KEY);
+        static::$branches = null;
     }
 
     public function getBranches()
@@ -234,32 +290,25 @@ class Category extends Model implements CategoryContract
         if (static::$branches) {
             return static::$branches;
         } else if (Cache::get(static::CACHE_KEY)) {
-            return unserialize(Cache::get(static::CACHE_KEY));
+            return Cache::get(static::CACHE_KEY);
         } else {
-            return unserialize($this->cacheBranches());
+            return $this->cacheBranches();
         }
     }
 
-    /**
-     * 清空分类树缓存
-     *
-     * @return void
-     */
-    public static function clearBranchesCache()
+    public function getBranch($category = null)
     {
-        Cache::forget(static::CACHE_KEY);
-        static::$trees = null;
-    }
+        $class = __CLASS__;
 
-    /**
-     * Get specified category tree
-     *
-     * @param CategoryContract|null $category
-     * @return \StdClass
-     */
-    public function getTree(CategoryContract $category = null)
-    {
-        return $this->getTreeById($category === null ? $this->id : $category->id);
+        if ($category === null) {
+            $offset = $this->id;
+        } else if ($category instanceof $class) {
+            $offset = $category->id;
+        } else {
+            $offset = $category;
+        }
+
+        return $this->getBranches()[$offset];
     }
 
     /**
@@ -273,7 +322,7 @@ class Category extends Model implements CategoryContract
         $trees = [];
 
         foreach ($branches as $branch) {
-            if ($branch->parent_id == 0) {
+            if (!$branch->parent) {
                 $trees[] = $branch;
             }
         }
@@ -282,7 +331,7 @@ class Category extends Model implements CategoryContract
     }
 
     /**
-     * Get specified category branch
+     * Get specified category branch from cache
      *
      * @param int $category_id
      * @return \StdClass
@@ -293,37 +342,15 @@ class Category extends Model implements CategoryContract
     }
 
     /**
-     * 获得指定分类ID的树结构
-     *
-     * @param integer $category_id
-     * @return \StdClass
-     */
-    public function getTreeById($category_id)
-    {
-        $tree = $this->getBranchById($category_id);
-
-        if ($tree->parent_id != 0) {
-            return null;
-        }
-
-        return $tree;
-    }
-
-    /**
-     * 简化分类对象
-     * 用于缓存分类的树状结构，缩小序列化的长度
+     * Simplify category model for caching categories branches, not include children or parent category,
+     * Children and parent category must be setted manually.
      *
      * @param boolean $root
-     * @return \StdClass
+     * @return SimplifiedCategory
      */
     protected function simplify()
     {
-        $category = new \StdClass;
-        $category->id = $this->id;
-        $category->name = $this->name;
-        $category->parent = null;
-        $category->children = [];
-        return $category;
+        return SimplifiedCategory::createFromCategory($this);
     }
 
     /**
